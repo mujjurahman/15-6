@@ -1,0 +1,100 @@
+<?php
+
+namespace Drupal\your_module\Plugin\WebformHandler;
+
+use Drupal\Core\Form\FormStateInterface;
+use Drupal\webform\Plugin\WebformHandlerBase;
+use Drupal\webform\webformSubmissionInterface;
+
+/**
+ * Provides a custom PFE Med Connect webform handler.
+ *
+ * @WebformHandler(
+ *   id = "pfe_med_connect_webform_handler",
+ *   label = @Translation("PFE Med Connect Webform Handler"),
+ *   category = @Translation("Custom"),
+ *   description = @Translation("Handles PFE Med Connect form submissions."),
+ *   cardinality = \Drupal\webform\Plugin\WebformHandlerInterface::CARDINALITY_SINGLE,
+ *   results = \Drupal\webform\Plugin\WebformHandlerInterface::RESULTS_PROCESSED,
+ * )
+ */
+class PfeMedConnectWebformHandler extends WebformHandlerBase {
+
+  /**
+   * {@inheritdoc}
+   */
+  public function submitForm(array &$form, FormStateInterface $form_state, WebformSubmissionInterface $webform_submission) {
+    // Get the submitted form values.
+    $values = $webform_submission->getData();
+
+    // Get the selected product and therapeutic area.
+    $product = $values['produit'];
+    $therapeuticArea = $values['aire_therapeutique'];
+
+    // Get the department value if available.
+    $department = isset($values['department']) ? $values['department'] : '';
+
+    // Query the custom_table to get the email addresses.
+    $emailAddresses = $this->getEmailAddresses($product, $therapeuticArea, $department);
+
+    // Prepare the email parameters.
+    $params = [
+      'message' => $values['message'],
+    ];
+
+    // Check if there are any email addresses.
+    if (!empty($emailAddresses)) {
+      // Send email to RMR and backup email addresses.
+      $this->sendEmail($params, $emailAddresses['RMR_adresse_email'], $emailAddresses['Backup_adresse_email']);
+    } else {
+      // Send a different email if no email addresses are found.
+      $this->sendDifferentEmail($params);
+    }
+  }
+
+  /**
+   * Queries the custom_table to get the email addresses.
+   *
+   * @param string $product
+   *   The product value.
+   * @param string $therapeuticArea
+   *   The therapeutic area value.
+   * @param string $department
+   *   The department value.
+   *
+   * @return array
+   *   An array of email addresses.
+   */
+  protected function getEmailAddresses($product, $therapeuticArea, $department) {
+    // Query the custom_table to get the email addresses based on the provided values.
+    // Implement your custom logic here to query the table and retrieve the email addresses.
+    // Return an array of email addresses.
+  }
+
+  /**
+   * Sends the email to the RMR and backup email addresses.
+   *
+   * @param array $params
+   *   An array of email parameters.
+   * @param string $rmr_email
+   *   The RMR email address.
+   * @param string $backup_email
+   *   The backup email address.
+   */
+  protected function sendEmail(array $params, $rmr_email, $backup_email) {
+    // Implement your email sending logic here.
+    // Use the provided email parameters and recipient addresses to send the email.
+  }
+
+  /**
+   * Sends a different email to a specific recipient.
+   *
+   * @param array $params
+   *   An array of email parameters.
+   */
+  protected function sendDifferentEmail(array $params) {
+    // Implement your email sending logic here for the different email.
+    // Use the provided email parameters and recipient address to send the email.
+  }
+
+}
