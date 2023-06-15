@@ -1,0 +1,6 @@
+name: 'pfe_med_connect'
+type: module
+description: 'custom module to sort the row of med_connect file'
+core_version_requirement: ^8 || ^9
+package: Custom
+dependencies:

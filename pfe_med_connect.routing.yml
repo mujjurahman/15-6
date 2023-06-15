@@ -1,0 +1,7 @@
+pfe_med_connect.form:
+  path: '/custom-form'
+  defaults:
+    _form: '\Drupal\pfe_med_connect\Form\CustomForm'
+    _title: 'Custom Form'
+  requirements:
+    _permission: 'access content'
