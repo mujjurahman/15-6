@@ -2,51 +2,35 @@
 
 namespace Drupal\pfe_med_connect\Plugin\ContactForm;
 
-use Drupal\Component\Utility\EmailValidatorInterface;
-use Drupal\Core\Contact\ContactFormInterface;
-use Drupal\Core\Contact\ContactMessageInterface;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Mail\MailManagerInterface;
 use Drupal\Core\Plugin\ContainerFactoryPluginInterface;
-use Drupal\Core\Plugin\PluginBase;
+use Drupal\contact\Plugin\ContactFormInterface;
+use Drupal\contact\Plugin\ContactFormBase;
 use Symfony\Component\DependencyInjection\ContainerInterface;
-use Drupal\Core\Database\Connection;
+use Drupal\pfe_med_connect\PfeMedConnectService;
 
 /**
- * Provides a contact form handler that sends emails based on custom logic.
+ * Provides a custom contact form submission handler.
  *
- * @ContactFormHandler(
- *   id = "pfe_med_connect_contact_handler",
- *   label = @Translation("Custom Contact Form Handler"),
+ * @ContactForm(
+ *   id = "pfe_med_connect_contact_submission_handler",
+ *   label = @Translation("PFE Med Connect Contact Form Submission Handler"),
  *   category = @Translation("Custom"),
- *   deriver = "Drupal\pfe_med_connect\Plugin\Derivative\PfeMedConnectContactFormHandler",
+ *   default_message = "Thank you for your submission.",
  * )
  */
-class PfeMedConnectContactFormHandler extends PluginBase implements ContactFormHandlerInterface, ContainerFactoryPluginInterface {
+class ContactSubmissionHandler extends ContactFormBase implements ContainerFactoryPluginInterface {
 
   /**
-   * The mail manager service.
+   * The PFE Med Connect service.
    *
-   * @var \Drupal\Core\Mail\MailManagerInterface
+   * @var \Drupal\pfe_med_connect\PfeMedConnectService
    */
-  protected $mailManager;
+  protected $pfeMedConnectService;
 
   /**
-   * The email validator service.
-   *
-   * @var \Drupal\Component\Utility\EmailValidatorInterface
-   */
-  protected $emailValidator;
-
-  /**
-   * The database connection service.
-   *
-   * @var \Drupal\Core\Database\Connection
-   */
-  protected $database;
-
-  /**
-   * Constructs a new PfeMedConnectContactFormHandler object.
+   * Constructs a new ContactSubmissionHandler instance.
    *
    * @param array $configuration
    *   The plugin configuration.
@@ -54,18 +38,14 @@ class PfeMedConnectContactFormHandler extends PluginBase implements ContactFormH
    *   The plugin ID.
    * @param mixed $plugin_definition
    *   The plugin definition.
-   * @param \Drupal\Core\Mail\MailManagerInterface $mail_manager
-   *   The mail manager service.
-   * @param \Drupal\Component\Utility\EmailValidatorInterface $email_validator
-   *   The email validator service.
-   * @param \Drupal\Core\Database\Connection $database
-   *   The database connection service.
+   * @param \Drupal\Core\Mail\MailManagerInterface $mailManager
+   *   The mail manager.
+   * @param \Drupal\pfe_med_connect\PfeMedConnectService $pfeMedConnectService
+   *   The PFE Med Connect service.
    */
-  public function __construct(array $configuration, $plugin_id, $plugin_definition, MailManagerInterface $mail_manager, EmailValidatorInterface $email_validator, Connection $database) {
-    parent::__construct($configuration, $plugin_id, $plugin_definition);
-    $this->mailManager = $mail_manager;
-    $this->emailValidator = $email_validator;
-    $this->database = $database;
+  public function __construct(array $configuration, $plugin_id, $plugin_definition, MailManagerInterface $mailManager, PfeMedConnectService $pfeMedConnectService) {
+    parent::__construct($configuration, $plugin_id, $plugin_definition, $mailManager);
+    $this->pfeMedConnectService = $pfeMedConnectService;
   }
 
   /**
@@ -77,113 +57,106 @@ class PfeMedConnectContactFormHandler extends PluginBase implements ContactFormH
       $plugin_id,
       $plugin_definition,
       $container->get('plugin.manager.mail'),
-      $container->get('email.validator'),
-      $container->get('database')
+      $container->get('pfe_med_connect.service')
     );
   }
 
   /**
    * {@inheritdoc}
    */
-  public function defaultConfiguration() {
-    return [];
-  }
+  public function buildForm(array $form, FormStateInterface $form_state) {
+    // Build your custom form fields here.
+    // Add additional fields as per your requirement.
+    // Example:
+    $form['additional_field'] = [
+      '#type' => 'textfield',
+      '#title' => $this->t('Additional Field'),
+      '#required' => TRUE,
+    ];
 
-  /**
-   * {@inheritdoc}
-   */
-  public function buildConfigurationForm(array $form, FormStateInterface $form_state) {
     return $form;
   }
 
   /**
    * {@inheritdoc}
    */
-  public function validateConfigurationForm(array &$form, FormStateInterface $form_state) {
-  }
-
-  /**
-   * {@inheritdoc}
-   */
-  public function submitConfigurationForm(array &$form, FormStateInterface $form_state) {
-  }
-
-  /**
-   * {@inheritdoc}
-   */
-  public function handleFormSubmission(ContactFormInterface $contact_form, ContactMessageInterface $contact_message, FormStateInterface $form_state) {
+  public function submitForm(array &$form, FormStateInterface $form_state) {
+    // Get the values submitted in the form.
     $values = $form_state->getValues();
 
-    // Get the values from the contact form.
-    $produit = $values['produit'];
-    $aireTherapeutique = $values['aire_therapeutique'];
-    $department = $values['department'];
+    // Get the product and therapeutic area values from the form.
+    $product = $values['product'];
+    $therapeuticArea = $values['therapeutic_area'];
 
-    // Query the custom_table to get the emails.
-    $emails = $this->getEmailsFromCustomTable($produit, $aireTherapeutique, $department);
+    // Check if the department field is present in the form.
+    $department = isset($values['department']) ? $values['department'] : NULL;
 
-    // Send emails based on the retrieved data.
-    $this->sendEmails($emails, $contact_message);
-  }
+    // Query the custom table to get the email addresses.
+    $emailAddresses = $this->pfeMedConnectService->getEmailAddresses($product, $therapeuticArea, $department);
 
-  /**
-   * Retrieves the emails from the custom_table based on the form values.
-   *
-   * @param string $produit
-   *   The produit value from the form.
-   * @param string $aireTherapeutique
-   *   The aire therapeutique value from the form.
-   * @param string $department
-   *   The department value from the form.
-   *
-   * @return array
-   *   An array containing the email addresses.
-   */
-  protected function getEmailsFromCustomTable($produit, $aireTherapeutique, $department) {
-    $emails = [];
+    // Check if email addresses are found.
+    if (!empty($emailAddresses)) {
+      // Send email to RMR adresse email.
+      $rmrEmail = $emailAddresses['rmr_email'];
+      // Send email to Backup adresse email.
+      $backupEmail = $emailAddresses['backup_email'];
 
-    // Query the custom_table to retrieve the emails based on the form values.
-    $query = $this->database->select('custom_table', 'ct');
-    $query->fields('ct', ['RMR_adresse_email', 'Backup_adresse_email']);
-    $query->condition('ct.Produit', $produit);
-    $query->condition('ct.Aire_therapeutique', $aireTherapeutique);
-    if (!empty($department)) {
-      $query->condition('ct.Departement', $department);
+      // Build the email message.
+      $params = [
+        'message' => $values['message'], // Example: Get the submitted message value.
+        'additional_field' => $values['additional_field'], // Example: Get the submitted additional field value.
+      ];
+      $mailParams = [
+        'subject' => $this->t('Contact Form Submission'),
+        'body' => $this->t('A contact form has been submitted. Message: @message, Additional Field: @additional_field', $params),
+      ];
+
+      // Send email to RMR adresse email.
+      $this->mailManager->mail(
+        'pfe_med_connect',
+        'contact_submission',
+        $rmrEmail,
+        $this->languageManager->getDefaultLanguage()->getId(),
+        $mailParams,
+        NULL,
+        TRUE
+      );
+
+      // Send email to Backup adresse email.
+      $this->mailManager->mail(
+        'pfe_med_connect',
+        'contact_submission',
+        $backupEmail,
+        $this->languageManager->getDefaultLanguage()->getId(),
+        $mailParams,
+        NULL,
+        TRUE
+      );
     }
-    $result = $query->execute();
+    else {
+      // Department is not available, send email to a different recipient.
+      $noDepartmentEmail = 'example@example.com'; // Set the email address for sending the email.
 
-    foreach ($result as $row) {
-      if (!empty($row->RMR_adresse_email) && $this->emailValidator->isValid($row->RMR_adresse_email)) {
-        $emails[] = $row->RMR_adresse_email;
-      }
-      if (!empty($row->Backup_adresse_email) && $this->emailValidator->isValid($row->Backup_adresse_email)) {
-        $emails[] = $row->Backup_adresse_email;
-      }
-    }
+      // Build the email message.
+      $params = [
+        'message' => $values['message'], // Example: Get the submitted message value.
+        'additional_field' => $values['additional_field'], // Example: Get the submitted additional field value.
+      ];
+      $mailParams = [
+        'subject' => $this->t('Contact Form Submission (No Department)'),
+        'body' => $this->t('A contact form has been submitted without a department. Message: @message, Additional Field: @additional_field', $params),
+      ];
 
-    return $emails;
-  }
-
-  /**
-   * Sends emails to the specified addresses.
-   *
-   * @param array $emails
-   *   An array of email addresses.
-   * @param \Drupal\Core\Contact\ContactMessageInterface $contact_message
-   *   The contact message object.
-   */
-  protected function sendEmails(array $emails, ContactMessageInterface $contact_message) {
-    if (!empty($emails)) {
-      $params['message'] = $contact_message;
-      $params['subject'] = $contact_message->getSubject();
-      $params['from'] = $contact_message->get('mail');
-      $params['reply-to'] = $contact_message->get('mail');
-      $params['headers'] = ['Content-Type' => 'text/html'];
-
-      foreach ($emails as $email) {
-        $params['to'] = $email;
-        $this->mailManager->mail('contact', 'page_mail', $email, $contact_message->getLanguage()->getId(), $params, NULL, TRUE);
-      }
+      // Send email to the recipient for forms without department.
+      $this->mailManager->mail(
+        'pfe_med_connect',
+        'contact_submission',
+        $noDepartmentEmail,
+        $this->languageManager->getDefaultLanguage()->getId(),
+        $mailParams,
+        NULL,
+        TRUE
+      );
     }
   }
 
